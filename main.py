@@ -86,22 +86,84 @@ def check_utf8(value):
     value.encode("utf-8")
 
 
+def check_hook_before_punch(value):
+    """The question hook must come before the punchline.
+
+    A pickup line is a setup, then a payoff: the hook asks the question
+    and the punch answers it after "Because". If the "Because" clause
+    showed up first, the line would read backwards — the listener would
+    get the answer before knowing what was being asked. So the "?"
+    that closes the hook must appear strictly earlier in the line than
+    the " because " that opens the punch.
+    """
+    lowered = value.lower()
+    question_pos = value.find("?")
+    because_pos = lowered.find(" because ")
+    if question_pos == -1:
+        raise ValueError("entry must ask its hook as a question")
+    if because_pos == -1:
+        raise ValueError("entry must deliver its punch after 'Because'")
+    if question_pos > because_pos:
+        raise ValueError("entry hook must come before its punch")
+
+
+def check_no_consecutive_punctuation(value):
+    """No doubled-up punctuation marks.
+
+    Two terminal marks in a row ("..", "??", "?!") would read like a
+    typo or a stutter, and the line is meant to land in one clean
+    breath. One mark per spot: the hook's "?" and the line's final
+    terminal mark, with plain words in between.
+    """
+    for pair in ("..", "??", "!!", "?!", "!?", ",,", "--"):
+        if pair in value:
+            raise ValueError(
+                "entry must not contain consecutive punctuation: %s" % pair
+            )
+
+
+# Checks grouped by what they guard, so a failure tells you which
+# aspect of the line broke: its shape, its pickup form, or its content.
+SHAPE_CHECKS = (
+    check_is_text,
+    check_not_blank,
+    check_length,
+    check_single_line,
+    check_no_edge_whitespace,
+    check_no_double_spaces,
+    check_terminal_punctuation,
+    check_no_consecutive_punctuation,
+    check_utf8,
+)
+
+FORM_CHECKS = (
+    check_pickup_form,
+    check_hook_before_punch,
+)
+
+CONTENT_CHECKS = (
+    check_aimed_at_ai,
+    check_fresh_angle,
+)
+
+
+def run_stage(value, stage_name, checks):
+    """Run one stage of checks; raises ValueError on the first failure."""
+    for check in checks:
+        try:
+            check(value)
+        except ValueError as exc:
+            raise ValueError("%s check failed: %s" % (stage_name, exc)) from exc
+
+
 def validate(value):
-    """Run every check; raises ValueError on the first failure."""
-    for check in (
-        check_is_text,
-        check_not_blank,
-        check_length,
-        check_single_line,
-        check_no_edge_whitespace,
-        check_no_double_spaces,
-        check_terminal_punctuation,
-        check_pickup_form,
-        check_aimed_at_ai,
-        check_fresh_angle,
-        check_utf8,
+    """Run every check, stage by stage; raises ValueError on failure."""
+    for stage_name, checks in (
+        ("shape", SHAPE_CHECKS),
+        ("form", FORM_CHECKS),
+        ("content", CONTENT_CHECKS),
     ):
-        check(value)
+        run_stage(value, stage_name, checks)
     return True
 
 
